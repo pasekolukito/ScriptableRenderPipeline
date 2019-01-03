@@ -1,6 +1,8 @@
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
 #include "Packages/com.unity.render-pipelines.lightweight/ShaderLibrary/Core.hlsl"
 
+Texture2D _CameraDepthTexture;
+
 // Could be e.g. the position of a primary camera or a shadow-casting light.
 float3 GetCurrentViewPosition()
 {
@@ -57,8 +59,7 @@ float4x4 VFXGetViewToWorldMatrix()
 
 float VFXSampleDepth(float4 posSS)
 {
-    //return LOAD_TEXTURE2D(_CameraDepthTexture, posSS.xy).r;
-    return 0.0f; //TODO
+    return LOAD_TEXTURE2D(_CameraDepthTexture, posSS.xy).r;
 }
 
 float VFXLinearEyeDepth(float depth)
