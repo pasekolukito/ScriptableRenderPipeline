@@ -72,7 +72,18 @@ float4 VFXApplyShadowBias(float4 posCS)
     return posCS;
 }
 
-float4 VFXApplyFog(float4 color,float4 posSS,float3 posWS)
+float4 VFXApplyFog(float4 color,float4 posCS,float3 posWS)
 {
-    return color; //TODO
+   float4 fog = (float4)0;
+   fog.rgb = unity_FogColor.rgb;
+   fog.a = ComputeFogFactor(posCS.z * posCS.w); //TODO Move this to vertex stage to fit with LWRP result
+
+#if VFX_BLENDMODE_ALPHA || IS_OPAQUE_PARTICLE
+   color.rgb = lerp(fog.rgb, color.rgb, fog.a);
+#elif VFX_BLENDMODE_ADD
+   color.rgb *= fog.a;
+#elif VFX_BLENDMODE_PREMULTIPLY
+   color.rgb = lerp(fog.rgb * color.a, color.rgb, fog.a);
+#endif
+   return color;
 }
