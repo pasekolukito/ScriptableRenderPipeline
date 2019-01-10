@@ -70,7 +70,7 @@ void VFXApplyShadowBias(inout float4 posCS, inout float3 posWS, float3 normalWS)
 
 void VFXApplyShadowBias(inout float4 posCS, inout float3 posWS)
 {
-    posWS = ApplyShadowBias(posWS, _LightDirection);
+    posWS = ApplyShadowBias(posWS, _LightDirection, _LightDirection);
     posCS = VFXTransformPositionWorldToClip(posWS);
 }
 

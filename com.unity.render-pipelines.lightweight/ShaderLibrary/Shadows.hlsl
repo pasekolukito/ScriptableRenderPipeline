@@ -231,10 +231,4 @@ float3 ApplyShadowBias(float3 positionWS, float3 normalWS, float3 lightDirection
     return positionWS;
 }
 
-float3 ApplyShadowBias(float3 positionWS, float3 lightDirection)
-{
-	positionWS = lightDirection * _ShadowBias.xxx + positionWS;
-    return positionWS;
-}
-
 #endif
