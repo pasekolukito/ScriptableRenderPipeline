@@ -1,19 +1,14 @@
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/CommonMaterial.hlsl"
 #include "Packages/com.unity.render-pipelines.lightweight/ShaderLibrary/Core.hlsl"
+#include "Packages/com.unity.render-pipelines.lightweight/ShaderLibrary/Shadows.hlsl"
 
 Texture2D _CameraDepthTexture;
+float3 _LightDirection;
 
-// Could be e.g. the position of a primary camera or a shadow-casting light.
 float3 GetCurrentViewPosition()
 {
-#if (defined(SHADERPASS) && (SHADERPASS != SHADERPASS_SHADOWS)) && (!UNITY_SINGLE_PASS_STEREO) // Can't use camera position when rendering stereo
-    return GetPrimaryCameraPosition();
-#else
-    // This is a generic solution.
-    // However, using '_WorldSpaceCameraPos' is better for cache locality,
-    // and in case we enable camera-relative rendering, we can statically set the position is 0.
     return UNITY_MATRIX_I_V._14_24_34;
-#endif
 }
 
 float4 VFXTransformPositionWorldToClip(float3 posWS)
@@ -67,9 +62,16 @@ float VFXLinearEyeDepth(float depth)
     return LinearEyeDepth(depth, _ZBufferParams);
 }
 
-float4 VFXApplyShadowBias(float4 posCS)
+void VFXApplyShadowBias(inout float4 posCS, inout float3 posWS, float3 normalWS)
 {
-    return posCS;
+    posWS = ApplyShadowBias(posWS, normalWS, _LightDirection);
+    posCS = VFXTransformPositionWorldToClip(posWS);
+}
+
+void VFXApplyShadowBias(inout float4 posCS, inout float3 posWS)
+{
+    posWS = ApplyShadowBias(posWS, _LightDirection);
+    posCS = VFXTransformPositionWorldToClip(posWS);
 }
 
 float4 VFXApplyFog(float4 color,float4 posCS,float3 posWS)
