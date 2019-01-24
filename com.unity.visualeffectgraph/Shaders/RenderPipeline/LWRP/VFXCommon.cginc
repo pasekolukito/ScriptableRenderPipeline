@@ -89,3 +89,8 @@ float4 VFXApplyFog(float4 color,float4 posCS,float3 posWS)
 #endif
    return color;
 }
+
+float4 VFXApplyPreExposure(float4 color)
+{
+    return color;
+}
