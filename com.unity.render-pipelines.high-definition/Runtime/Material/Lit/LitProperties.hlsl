@@ -101,6 +101,7 @@ CBUFFER_START(UnityPerMaterial)
 
 // shared constant between lit and layered lit
 float _AlphaCutoff;
+float _UseShadowThreshold;
 float _AlphaCutoffShadow;
 float _AlphaCutoffPrepass;
 float _AlphaCutoffPostpass;
@@ -180,7 +181,7 @@ float _HeightCenter;
 
 float _Anisotropy;
 
-int   _DiffusionProfile;
+float _DiffusionProfileHash;
 float _SubsurfaceMask;
 float _Thickness;
 float4 _ThicknessRemap;
@@ -240,7 +241,7 @@ PROP_DECL(float, _DetailSmoothnessScale);
 PROP_DECL(float, _HeightAmplitude);
 PROP_DECL(float, _HeightCenter);
 
-PROP_DECL(int, _DiffusionProfile);
+PROP_DECL(float, _DiffusionProfileHash);
 PROP_DECL(float, _SubsurfaceMask);
 PROP_DECL(float, _Thickness);
 PROP_DECL(float4, _ThicknessRemap);

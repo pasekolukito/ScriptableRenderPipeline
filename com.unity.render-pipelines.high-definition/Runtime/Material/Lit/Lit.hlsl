@@ -101,7 +101,7 @@ TEXTURE2D(_ShadowMaskTexture); // Alias for shadow mask, so we don't need to kno
 #define CLEAR_COAT_IOR 1.5
 #define CLEAR_COAT_IETA (1.0 / CLEAR_COAT_IOR) // IETA is the inverse eta which is the ratio of IOR of two interface
 #define CLEAR_COAT_F0 0.04 // IORToFresnel0(CLEAR_COAT_IOR)
-#define CLEAR_COAT_ROUGHNESS 0.03
+#define CLEAR_COAT_ROUGHNESS 0.01
 #define CLEAR_COAT_PERCEPTUAL_SMOOTHNESS RoughnessToPerceptualSmoothness(CLEAR_COAT_ROUGHNESS)
 #define CLEAR_COAT_PERCEPTUAL_ROUGHNESS RoughnessToPerceptualRoughness(CLEAR_COAT_ROUGHNESS)
 
@@ -325,7 +325,7 @@ SSSData ConvertSurfaceDataToSSSData(SurfaceData surfaceData)
 
     sssData.diffuseColor = surfaceData.baseColor;
     sssData.subsurfaceMask = surfaceData.subsurfaceMask;
-    sssData.diffusionProfile = surfaceData.diffusionProfile;
+    sssData.diffusionProfileIndex = FindDiffusionProfileIndex(surfaceData.diffusionProfileHash);
 
     return sssData;
 }
@@ -429,16 +429,18 @@ BSDFData ConvertSurfaceDataToBSDFData(uint2 positionSS, SurfaceData surfaceData)
     // However in practice we keep parity between deferred and forward, so we should constrain the various features.
     // The UI is in charge of setuping the constrain, not the code. So if users is forward only and want unleash power, it is easy to unleash by some UI change
 
+    bsdfData.diffusionProfileIndex = FindDiffusionProfileIndex(surfaceData.diffusionProfileHash);
+
     if (HasFlag(surfaceData.materialFeatures, MATERIALFEATUREFLAGS_LIT_SUBSURFACE_SCATTERING))
     {
         // Assign profile id and overwrite fresnel0
-        FillMaterialSSS(surfaceData.diffusionProfile, surfaceData.subsurfaceMask, bsdfData);
+        FillMaterialSSS(bsdfData.diffusionProfileIndex, surfaceData.subsurfaceMask, bsdfData);
     }
 
     if (HasFlag(surfaceData.materialFeatures, MATERIALFEATUREFLAGS_LIT_TRANSMISSION))
     {
         // Assign profile id and overwrite fresnel0
-        FillMaterialTransmission(surfaceData.diffusionProfile, surfaceData.thickness, bsdfData);
+        FillMaterialTransmission(bsdfData.diffusionProfileIndex, surfaceData.thickness, bsdfData);
     }
 
     if (HasFlag(surfaceData.materialFeatures, MATERIALFEATUREFLAGS_LIT_ANISOTROPY))
@@ -652,7 +654,7 @@ void EncodeIntoGBuffer( SurfaceData surfaceData
 // from the structured buffer use to generate the indirect draw call. It allow to not go through all branch and the branch is scalar (not VGPR)
 uint DecodeFromGBuffer(uint2 positionSS, uint tileFeatureFlags, out BSDFData bsdfData, out BuiltinData builtinData)
 {
-    // Note: we have ZERO_INITIALIZE the struct, so bsdfData.diffusionProfile == DIFFUSION_PROFILE_NEUTRAL_ID,
+    // Note: we have ZERO_INITIALIZE the struct, so bsdfData.diffusionProfileIndex == DIFFUSION_PROFILE_NEUTRAL_ID,
     // bsdfData.anisotropy == 0, bsdfData.subsurfaceMask == 0, etc...
     ZERO_INITIALIZE(BSDFData, bsdfData);
     // Note: Some properties of builtinData are not used, just init all at 0 to silent the compiler
@@ -785,7 +787,7 @@ uint DecodeFromGBuffer(uint2 positionSS, uint tileFeatureFlags, out BSDFData bsd
         // We must do this so the compiler can optimize away the read from the G-Buffer 0 to the very end (in PostEvaluateBSDF)
         // Note that we don't use sssData.subsurfaceMask here. But it is still assign so we can have the information in the
         // material debug view + If we require it in the future.
-        UnpackFloatInt8bit(inGBuffer2.b, 16, sssData.subsurfaceMask, sssData.diffusionProfile);
+        UnpackFloatInt8bit(inGBuffer2.b, 16, sssData.subsurfaceMask, sssData.diffusionProfileIndex);
 
         // Reminder: when using SSS we exchange specular occlusion and subsurfaceMask/profileID
         bsdfData.specularOcclusion = inGBuffer2.r;
@@ -796,13 +798,13 @@ uint DecodeFromGBuffer(uint2 positionSS, uint tileFeatureFlags, out BSDFData bsd
         // The neutral value of subsurfaceMask is 0 (handled by ZERO_INITIALIZE).
         if (HasFlag(pixelFeatureFlags, MATERIALFEATUREFLAGS_LIT_SUBSURFACE_SCATTERING))
         {
-            FillMaterialSSS(sssData.diffusionProfile, sssData.subsurfaceMask, bsdfData);
+            FillMaterialSSS(sssData.diffusionProfileIndex, sssData.subsurfaceMask, bsdfData);
         }
 
         // The neutral value of thickness and transmittance is 0 (handled by ZERO_INITIALIZE).
         if (HasFlag(pixelFeatureFlags, MATERIALFEATUREFLAGS_LIT_TRANSMISSION))
         {
-            FillMaterialTransmission(sssData.diffusionProfile, inGBuffer2.g, bsdfData);
+            FillMaterialTransmission(sssData.diffusionProfileIndex, inGBuffer2.g, bsdfData);
         }
     }
     else
@@ -1485,12 +1487,22 @@ DirectLighting EvaluateBSDF_Rect(   LightLoopContext lightLoopContext,
             // Rotate the endpoints into the local coordinate system.
             lightVerts = mul(lightVerts, transpose(preLightData.orthoBasisViewNormal));
 
-            float ltcValue;
+            float3 ltcValue;
 
             // Evaluate the diffuse part
             // Polygon irradiance in the transformed configuration.
-            ltcValue  = PolygonIrradiance(mul(lightVerts, preLightData.ltcTransformDiffuse));
+            float4x3 LD = mul(lightVerts, preLightData.ltcTransformDiffuse);
+            ltcValue  = PolygonIrradiance(LD);
             ltcValue *= lightData.diffuseDimmer;
+
+            // Only apply cookie if there is one
+            if ( lightData.cookieIndex >= 0 )
+            {
+                // Compute the cookie data for the diffuse term
+                float3 formFactorD =  PolygonFormFactor(LD);
+                ltcValue *= SampleAreaLightCookie(lightData.cookieIndex, LD, formFactorD);
+            }
+
             // We don't multiply by 'bsdfData.diffuseColor' here. It's done only once in PostEvaluateBSDF().
             // See comment for specular magnitude, it apply to diffuse as well
             lighting.diffuse = preLightData.diffuseFGD * ltcValue;
@@ -1508,8 +1520,18 @@ DirectLighting EvaluateBSDF_Rect(   LightLoopContext lightLoopContext,
 
                 // Polygon irradiance in the transformed configuration.
                 // TODO: double evaluation is very inefficient! This is a temporary solution.
-                ltcValue  = PolygonIrradiance(mul(lightVerts, ltcTransform));
+                float4x3 LTD = mul(lightVerts, ltcTransform);
+                ltcValue  = PolygonIrradiance(LTD);
                 ltcValue *= lightData.diffuseDimmer;
+
+                // Only apply cookie if there is one
+                if ( lightData.cookieIndex >= 0 )
+                {
+                    // Compute the cookie data for the transmission diffuse term
+                    float3 formFactorTD = PolygonFormFactor(LTD);
+                    ltcValue *= SampleAreaLightCookie(lightData.cookieIndex, LTD, formFactorTD);
+                }
+
                 // We use diffuse lighting for accumulation since it is going to be blurred during the SSS pass.
                 // We don't multiply by 'bsdfData.diffuseColor' here. It's done only once in PostEvaluateBSDF().
                 lighting.diffuse += bsdfData.transmittance * ltcValue;
@@ -1517,8 +1539,18 @@ DirectLighting EvaluateBSDF_Rect(   LightLoopContext lightLoopContext,
 
             // Evaluate the specular part
             // Polygon irradiance in the transformed configuration.
-            ltcValue  = PolygonIrradiance(mul(lightVerts, preLightData.ltcTransformSpecular));
+            float4x3 LS = mul(lightVerts, preLightData.ltcTransformSpecular);
+            ltcValue  = PolygonIrradiance(LS);
             ltcValue *= lightData.specularDimmer;
+            
+            // Only apply cookie if there is one
+            if ( lightData.cookieIndex >= 0 )
+            {
+                // Compute the cookie data for the specular term
+                float3 formFactorS =  PolygonFormFactor(LS);
+                ltcValue *= SampleAreaLightCookie(lightData.cookieIndex, LS, formFactorS);
+            }
+
             // We need to multiply by the magnitude of the integral of the BRDF
             // ref: http://advances.realtimerendering.com/s2016/s2016_ltc_fresnel.pdf
             // This value is what we store in specularFGD, so reuse it
@@ -1552,12 +1584,12 @@ DirectLighting EvaluateBSDF_Rect(   LightLoopContext lightLoopContext,
 
     }
 
-#ifdef ENABLE_RAYTRACING
-    if(_RaytracedAreaShadow == 1 && lightData.shadowIndex != -1)
+#if SHADEROPTIONS_RAYTRACING && (SHADERPASS == SHADERPASS_DEFERRED_LIGHTING)
+    if (_RaytracedAreaShadow == 1 && lightData.shadowIndex != -1)
     {
-        float4 areaShadow = LOAD_TEXTURE2D_ARRAY(_AreaShadowTexture, posInput.positionSS, lightData.shadowIndex);
-        lighting.diffuse *= areaShadow.xyz;
-        lighting.specular *= areaShadow.xyz;
+        float areaShadow = LOAD_TEXTURE2D_ARRAY(_AreaShadowTexture, posInput.positionSS, lightData.shadowIndex).x;
+        lighting.diffuse *= areaShadow;
+        lighting.specular *= areaShadow;
     }
 #endif
 
@@ -1761,14 +1793,12 @@ IndirectLighting EvaluateBSDF_Env(  LightLoopContext lightLoopContext,
     float iblMipLevel;
     // TODO: We need to match the PerceptualRoughnessToMipmapLevel formula for planar, so we don't do this test (which is specific to our current lightloop)
     // Specific case for Texture2Ds, their convolution is a gaussian one and not a GGX one - So we use another roughness mip mapping.
-#if !defined(SHADER_API_METAL)
     if (IsEnvIndexTexture2D(lightData.envIndex))
     {
         // Empirical remapping
         iblMipLevel = PlanarPerceptualRoughnessToMipmapLevel(preLightData.iblPerceptualRoughness, _ColorPyramidScale.z);
     }
     else
-#endif
     {
         iblMipLevel = PerceptualRoughnessToMipmapLevel(preLightData.iblPerceptualRoughness);
     }

@@ -11,6 +11,7 @@ Shader "HDRP/Lit"
         // Reminder. Color here are in linear but the UI (color picker) do the conversion sRGB to linear
         _BaseColor("BaseColor", Color) = (1,1,1,1)
         _BaseColorMap("BaseColorMap", 2D) = "white" {}
+        [HideInInspector] _BaseColorMap_MipInfo("_BaseColorMap_MipInfo", Vector) = (0, 0, 0, 0)
 
         _Metallic("_Metallic", Range(0.0, 1.0)) = 0
         _Smoothness("Smoothness", Range(0.0, 1.0)) = 0.5
@@ -56,7 +57,6 @@ Shader "HDRP/Lit"
         _Anisotropy("Anisotropy", Range(-1.0, 1.0)) = 0
         _AnisotropyMap("AnisotropyMap", 2D) = "white" {}
 
-        _DiffusionProfile("Diffusion Profile", Int) = 0
         _SubsurfaceMask("Subsurface Radius", Range(0.0, 1.0)) = 1.0
         _SubsurfaceMaskMap("Subsurface Radius Map", 2D) = "white" {}
         _Thickness("Thickness", Range(0.0, 1.0)) = 1.0
@@ -107,6 +107,8 @@ Shader "HDRP/Lit"
         _DistortionBlurRemapMin("DistortionBlurRemapMin", Float) = 0.0
         _DistortionBlurRemapMax("DistortionBlurRemapMax", Float) = 1.0
 
+            
+        [ToggleUI]  _UseShadowThreshold("_UseShadowThreshold", Float) = 0.0
         [ToggleUI]  _AlphaCutoffEnable("Alpha Cutoff Enable", Float) = 0.0
         _AlphaCutoff("Alpha Cutoff", Range(0.0, 1.0)) = 0.5 
         _AlphaCutoffShadow("_AlphaCutoffShadow", Range(0.0, 1.0)) = 0.5
@@ -125,12 +127,22 @@ Shader "HDRP/Lit"
         _TransmittanceColor("Transmittance Color", Color) = (1.0, 1.0, 1.0)
         _TransmittanceColorMap("TransmittanceColorMap", 2D) = "white" {}
         _ATDistance("Transmittance Absorption Distance", Float) = 1.0
+        [ToggleUI] _TransparentWritingVelocity("_TransparentWritingVelocity", Float) = 0.0
 
         // Stencil state
-        [HideInInspector] _StencilRef("_StencilRef", Int) = 2 // StencilLightingUsage.RegularLighting  (fixed at compile time)
-        [HideInInspector] _StencilWriteMask("_StencilWriteMask", Int) = 7 // StencilMask.Lighting  (fixed at compile time)
-        [HideInInspector] _StencilRefMV("_StencilRefMV", Int) = 128 // StencilLightingUsage.RegularLighting  (fixed at compile time)
-        [HideInInspector] _StencilWriteMaskMV("_StencilWriteMaskMV", Int) = 128 // StencilMask.ObjectsVelocity  (fixed at compile time)
+
+        // Forward
+        [HideInInspector] _StencilRef("_StencilRef", Int) = 2 // StencilLightingUsage.RegularLighting
+        [HideInInspector] _StencilWriteMask("_StencilWriteMask", Int) = 3 // StencilMask.Lighting
+        // GBuffer
+        [HideInInspector] _StencilRefGBuffer("_StencilRefGBuffer", Int) = 2 // StencilLightingUsage.RegularLighting
+        [HideInInspector] _StencilWriteMaskGBuffer("_StencilWriteMaskGBuffer", Int) = 3 // StencilMask.Lighting
+        // Depth prepass
+        [HideInInspector] _StencilRefDepth("_StencilRefDepth", Int) = 0 // Nothing
+        [HideInInspector] _StencilWriteMaskDepth("_StencilWriteMaskDepth", Int) = 32 // DoesntReceiveSSR
+        // Motion vector pass
+        [HideInInspector] _StencilRefMV("_StencilRefMV", Int) = 128 // StencilMask.ObjectsVelocity
+        [HideInInspector] _StencilWriteMaskMV("_StencilWriteMaskMV", Int) = 128 // StencilMask.ObjectsVelocity
 
         // Blending state
         [HideInInspector] _SurfaceType("__surfacetype", Float) = 0.0
@@ -212,6 +224,9 @@ Shader "HDRP/Lit"
         [ToggleUI] _SupportDecals("Support Decals", Float) = 1.0
         [ToggleUI] _ReceivesSSR("Receives SSR", Float) = 1.0
 
+        [HideInInspector] _DiffusionProfile("Obsolete, kept for migration purpose", Int) = 0
+        [HideInInspector] _DiffusionProfileAsset("Diffusion Profile Asset", Vector) = (0, 0, 0, 0)
+        [HideInInspector] _DiffusionProfileHash("Diffusion Profile Hash", Float) = 0
     }
 
     HLSLINCLUDE
@@ -262,6 +277,7 @@ Shader "HDRP/Lit"
     #pragma shader_feature_local _ _BLENDMODE_ALPHA _BLENDMODE_ADD _BLENDMODE_PRE_MULTIPLY
     #pragma shader_feature_local _BLENDMODE_PRESERVE_SPECULAR_LIGHTING
     #pragma shader_feature_local _ENABLE_FOG_ON_TRANSPARENT
+    #pragma shader_feature_local _TRANSPARENT_WRITES_VELOCITY
 
     // MaterialFeature are used as shader feature to allow compiler to optimize properly
     #pragma shader_feature_local _MATERIAL_FEATURE_SUBSURFACE_SCATTERING
@@ -290,6 +306,9 @@ Shader "HDRP/Lit"
     #define OUTPUT_SPLIT_LIGHTING
     #endif
 
+    #if defined(_TRANSPARENT_WRITES_VELOCITY) && defined(_SURFACE_TYPE_TRANSPARENT)
+    #define _WRITE_TRANSPARENT_VELOCITY
+    #endif
     //-------------------------------------------------------------------------------------
     // Include
     //-------------------------------------------------------------------------------------
@@ -326,7 +345,7 @@ Shader "HDRP/Lit"
 
         Pass
         {
-            Name "SceneSelectionPass" // Name is not used
+            Name "SceneSelectionPass"
             Tags { "LightMode" = "SceneSelectionPass" }
 
             Cull Off
@@ -354,7 +373,7 @@ Shader "HDRP/Lit"
         // Caution: The outline selection in the editor use the vertex shader/hull/domain shader of the first pass declare. So it should not bethe  meta pass.
         Pass
         {
-            Name "GBuffer"  // Name is not used
+            Name "GBuffer"
             Tags { "LightMode" = "GBuffer" } // This will be only for opaque object based on the RenderQueue index
 
             Cull [_CullMode]
@@ -362,8 +381,8 @@ Shader "HDRP/Lit"
 
             Stencil
             {
-                WriteMask [_StencilWriteMask]
-                Ref  [_StencilRef]
+                WriteMask [_StencilWriteMaskGBuffer]
+                Ref [_StencilRefGBuffer]
                 Comp Always
                 Pass Replace
             }
@@ -379,8 +398,9 @@ Shader "HDRP/Lit"
             #pragma multi_compile DECALS_OFF DECALS_3RT DECALS_4RT
             #pragma multi_compile _ LIGHT_LAYERS
 
-        #ifdef _ALPHATEST_ON
+        #ifndef DEBUG_DISPLAY
             // When we have alpha test, we will force a depth prepass so we always bypass the clip instruction in the GBuffer
+            // Don't do it with debug display mode as it is possible there is no depth prepass in this case
             #define SHADERPASS_GBUFFER_BYPASS_ALPHA_TEST
         #endif
 
@@ -407,7 +427,7 @@ Shader "HDRP/Lit"
         Pass
         {
             Name "META"
-            Tags{ "LightMode" = "Meta" }
+            Tags{ "LightMode" = "META" }
 
             Cull Off
 
@@ -448,7 +468,6 @@ Shader "HDRP/Lit"
 
             #define SHADERPASS SHADERPASS_SHADOWS
             #define USE_LEGACY_UNITY_MATRIX_VARIABLES
-            #define CUTOFF_TRANSPARENT_DEPTH_SHADOWS
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/ShaderVariables.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Material.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Lit/Lit.hlsl"
@@ -472,8 +491,8 @@ Shader "HDRP/Lit"
             // To be able to tag stencil with disableSSR information for forward
             Stencil
             {
-                WriteMask [_StencilWriteMask]
-                Ref [_StencilRef]
+                WriteMask [_StencilWriteMaskDepth]
+                Ref [_StencilRefDepth]
                 Comp Always
                 Pass Replace
             }
@@ -509,7 +528,7 @@ Shader "HDRP/Lit"
 
         Pass
         {
-            Name "Motion Vectors"
+            Name "MotionVectors"
             Tags{ "LightMode" = "MotionVectors" } // Caution, this need to be call like this to setup the correct parameters by C++ (legacy Unity)
 
             // If velocity pass (motion vectors) is enabled we tag the stencil so it don't perform CameraMotionVelocity
@@ -549,7 +568,7 @@ Shader "HDRP/Lit"
 
         Pass
         {
-            Name "Distortion" // Name is not used
+            Name "DistortionVectors"
             Tags { "LightMode" = "DistortionVectors" } // This will be only for transparent object based on the RenderQueue index
 
             Blend [_DistortionSrcBlend] [_DistortionDstBlend], [_DistortionBlurSrcBlend] [_DistortionBlurDstBlend]
@@ -609,6 +628,7 @@ Shader "HDRP/Lit"
             Blend [_SrcBlend] [_DstBlend]
             ZWrite [_ZWrite]
             Cull Front
+            ColorMask [_ColorMaskTransparentVel] 1
 
             HLSLPROGRAM
 
@@ -627,7 +647,7 @@ Shader "HDRP/Lit"
 
             #define SHADERPASS SHADERPASS_FORWARD
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/ShaderVariables.hlsl"
-    #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Material.hlsl"
+            #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Material.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Lighting/Lighting.hlsl"
 
         #ifdef DEBUG_DISPLAY
@@ -659,7 +679,7 @@ Shader "HDRP/Lit"
 
         Pass
         {
-            Name "Forward" // Name is not used
+            Name "Forward"
             Tags { "LightMode" = "Forward" } // This will be only for transparent object based on the RenderQueue index
 
             Stencil
@@ -675,6 +695,7 @@ Shader "HDRP/Lit"
             ZTest [_ZTestDepthEqualForOpaque]
             ZWrite [_ZWrite]
             Cull [_CullModeForward]
+            ColorMask [_ColorMaskTransparentVel] 1
 
             HLSLPROGRAM
 
@@ -693,13 +714,13 @@ Shader "HDRP/Lit"
 
             #define SHADERPASS SHADERPASS_FORWARD
             // In case of opaque we don't want to perform the alpha test, it is done in depth prepass and we use depth equal for ztest (setup from UI)
-            #ifndef _SURFACE_TYPE_TRANSPARENT
+            // Don't do it with debug display mode as it is possible there is no depth prepass in this case
+            #if !defined(_SURFACE_TYPE_TRANSPARENT) && !defined(DEBUG_DISPLAY)
                 #define SHADERPASS_FORWARD_BYPASS_ALPHA_TEST
             #endif
-
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/ShaderVariables.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Lighting/Lighting.hlsl"
-    #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Material.hlsl"
+            #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Material.hlsl"
 
         #ifdef DEBUG_DISPLAY
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Debug/DebugDisplay.hlsl"
@@ -741,7 +762,7 @@ Shader "HDRP/Lit"
             #define SHADERPASS SHADERPASS_DEPTH_ONLY
             #define CUTOFF_TRANSPARENT_DEPTH_POSTPASS
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/ShaderVariables.hlsl"
-    #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Material.hlsl"
+            #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Material.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Lit/Lit.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Lit/ShaderPass/LitDepthPass.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Lit/LitData.hlsl"
@@ -758,7 +779,7 @@ Shader "HDRP/Lit"
     {
         Pass
         {
-            Name "RTRaytrace_Reflections"
+            Name "ReflectionDXR"
             Tags{ "LightMode" = "ReflectionDXR" }
 
             HLSLPROGRAM
@@ -769,6 +790,8 @@ Shader "HDRP/Lit"
             #pragma multi_compile _ DIRLIGHTMAP_COMBINED
             #pragma multi_compile _ DYNAMICLIGHTMAP_ON
             
+            #define SHADERPASS SHADERPASS_RAYTRACING_REFLECTION
+
              // We use the low shadow maps for raytracing
             #define SHADOW_LOW
 
@@ -776,6 +799,7 @@ Shader "HDRP/Lit"
 
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/ShaderVariables.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Material.hlsl"
+            #include "Packages/com.unity.render-pipelines.high-definition/Runtime/RenderPipeline/Raytracing/Shaders/ShaderVariablesRaytracing.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/RenderPipeline/Raytracing/Shaders/ShaderVariablesRaytracingLightLoop.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Lighting/Lighting.hlsl"
  
@@ -794,7 +818,7 @@ Shader "HDRP/Lit"
 
         Pass
         {
-            Name "RTRaytrace_Forward"
+            Name "ForwardDXR"
             Tags{ "LightMode" = "ForwardDXR" }
 
             HLSLPROGRAM
@@ -812,6 +836,7 @@ Shader "HDRP/Lit"
 
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/ShaderVariables.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Material.hlsl"
+            #include "Packages/com.unity.render-pipelines.high-definition/Runtime/RenderPipeline/Raytracing/Shaders/ShaderVariablesRaytracing.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/RenderPipeline/Raytracing/Shaders/ShaderVariablesRaytracingLightLoop.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Lighting/Lighting.hlsl"
  
@@ -830,8 +855,8 @@ Shader "HDRP/Lit"
 
         Pass
         {
-            Name "RTRaytrace_Visibility"
-            Tags{ "LightMode" = "ShadowsDXR" }
+            Name "VisibilityDXR"
+            Tags{ "LightMode" = "VisibilityDXR" }
 
             HLSLPROGRAM
 
@@ -842,6 +867,7 @@ Shader "HDRP/Lit"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/ShaderVariables.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Material.hlsl"
 
+            #include "Packages/com.unity.render-pipelines.high-definition/Runtime/RenderPipeline/Raytracing/Shaders/ShaderVariablesRaytracing.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/RenderPipeline/Raytracing/Shaders/RaytracingIntersection.hlsl"
 
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Lit/Lit.hlsl"

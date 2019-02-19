@@ -513,10 +513,10 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             bool debugOutput = false;
 
             // grab all of the active nodes (for pixel and vertex graphs)
-            var vertexNodes = ListPool<INode>.Get();
+            var vertexNodes = ListPool<AbstractMaterialNode>.Get();
             NodeUtils.DepthFirstCollectNodesFromNode(vertexNodes, masterNode, NodeUtils.IncludeSelf.Include, pass.VertexShaderSlots);
 
-            var pixelNodes = ListPool<INode>.Get();
+            var pixelNodes = ListPool<AbstractMaterialNode>.Get();
             NodeUtils.DepthFirstCollectNodesFromNode(pixelNodes, masterNode, NodeUtils.IncludeSelf.Include, pass.PixelShaderSlots);
 
             // graph requirements describe what the graph itself requires
@@ -555,7 +555,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             GraphUtil.GenerateSurfaceDescriptionFunction(
                 pixelNodes,
                 masterNode,
-                masterNode.owner as AbstractMaterialGraph,
+                masterNode.owner as GraphData,
                 pixelGraphEvalFunction,
                 functionRegistry,
                 sharedProperties,
@@ -587,7 +587,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                 // -------------------------------------
                 // Generate Vertex Description function
                 GraphUtil.GenerateVertexDescriptionFunction(
-                    masterNode.owner as AbstractMaterialGraph,
+                    masterNode.owner as GraphData,
                     vertexGraphEvalFunction,
                     functionRegistry,
                     sharedProperties,
@@ -952,7 +952,6 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
                     return "Default";
                 case HDRenderQueue.RenderQueueType.AfterPostProcessOpaque:
                     return "After Post-process";
-
                 case HDRenderQueue.RenderQueueType.PreRefraction:
                     return "Before Refraction";
                 case HDRenderQueue.RenderQueueType.Transparent:
@@ -971,32 +970,111 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline
             }
         }
 
-        public static System.Collections.Generic.List<HDRenderQueue.RenderQueueType> GetRenderingPassList(bool opaque)
+        public static System.Collections.Generic.List<HDRenderQueue.RenderQueueType> GetRenderingPassList(bool opaque, bool needAfterPostProcess)
         {
+            var result = new System.Collections.Generic.List<HDRenderQueue.RenderQueueType>();
             if (opaque)
             {
-                return new System.Collections.Generic.List<HDRenderQueue.RenderQueueType>()
-                {
-                    HDRenderQueue.RenderQueueType.Opaque
-                  //  , HDRenderQueue.RenderQueueType.AfterPostProcessOpaque
+                result.Add(HDRenderQueue.RenderQueueType.Opaque);
+                if (needAfterPostProcess)
+                    result.Add(HDRenderQueue.RenderQueueType.AfterPostProcessOpaque);
 #if ENABLE_RAYTRACING
-                    , HDRenderQueue.RenderQueueType.RaytracingOpaque
+                result.Add(HDRenderQueue.RenderQueueType.RaytracingOpaque);
 #endif
-                };
             }
             else
             {
-                return new System.Collections.Generic.List<HDRenderQueue.RenderQueueType>()
-                {
-                    HDRenderQueue.RenderQueueType.PreRefraction
-                    , HDRenderQueue.RenderQueueType.Transparent
-                 //   , HDRenderQueue.RenderQueueType.LowTransparent
-                 //   , HDRenderQueue.RenderQueueType.AfterPostprocessTransparent
+                result.Add(HDRenderQueue.RenderQueueType.PreRefraction);
+                result.Add(HDRenderQueue.RenderQueueType.Transparent);
+                //result.AddHDRenderQueue.RenderQueueType.LowTransparent):
+                if (needAfterPostProcess)
+                    result.Add(HDRenderQueue.RenderQueueType.AfterPostprocessTransparent);
 #if ENABLE_RAYTRACING
-                    , HDRenderQueue.RenderQueueType.RaytracingTransparent
+                result.Add(HDRenderQueue.RenderQueueType.RaytracingTransparent);
 #endif
+            }
+
+            return result;
+        }
+
+        public static void GetStencilStateForDepthOrMV(bool receiveDecals, bool receiveSSR, bool useObjectVelocity, ref Pass pass)
+        {
+            int stencilWriteMask = (int)HDRenderPipeline.StencilBitMask.DecalsForwardOutputNormalBuffer;
+            int stencilRef = receiveDecals ? (int)HDRenderPipeline.StencilBitMask.DecalsForwardOutputNormalBuffer : 0;
+
+            stencilWriteMask |= (int)HDRenderPipeline.StencilBitMask.DoesntReceiveSSR;
+            stencilRef |= !receiveSSR ? (int)HDRenderPipeline.StencilBitMask.DoesntReceiveSSR : 0;
+
+            stencilWriteMask |= useObjectVelocity ? (int)HDRenderPipeline.StencilBitMask.ObjectVelocity : 0;
+            stencilRef |= useObjectVelocity ? (int)HDRenderPipeline.StencilBitMask.ObjectVelocity : 0;
+
+            if (stencilWriteMask != 0)
+            {
+                pass.StencilOverride = new List<string>()
+                {
+                    "// Stencil setup",
+                    "Stencil",
+                    "{",
+                    string.Format("   WriteMask {0}", stencilWriteMask),
+                    string.Format("   Ref  {0}", stencilRef),
+                    "   Comp Always",
+                    "   Pass Replace",
+                    "}"
                 };
             }
+        }
+
+        public static void GetStencilStateForForward(bool useSplitLighting, ref Pass pass)
+        {
+            pass.StencilOverride = new List<string>()
+            {
+                "// Stencil setup",
+                "Stencil",
+                "{",
+                string.Format("   WriteMask {0}", (int) HDRenderPipeline.StencilBitMask.LightingMask),
+                string.Format("   Ref  {0}", useSplitLighting ? (int)StencilLightingUsage.SplitLighting : (int)StencilLightingUsage.RegularLighting),
+                "   Comp Always",
+                "   Pass Replace",
+                "}"
+            };
+        }
+
+        public static void GetStencilStateForForwardUnlit(ref Pass pass)
+        {
+            pass.StencilOverride = new List<string>()
+            {
+                "// Stencil setup",
+                "Stencil",
+                "{",
+                string.Format("   WriteMask {0}", (int) HDRenderPipeline.StencilBitMask.LightingMask),
+                string.Format("   Ref  {0}", (int)StencilLightingUsage.NoLighting),
+                "   Comp Always",
+                "   Pass Replace",
+                "}"
+            };
+        }        
+
+        public static void GetStencilStateForGBuffer(bool receiveSSR, bool useSplitLighting, ref Pass pass)
+        {
+            int stencilWriteMask = (int)HDRenderPipeline.StencilBitMask.LightingMask;
+            int stencilRef = useSplitLighting ? (int)StencilLightingUsage.SplitLighting : (int)StencilLightingUsage.RegularLighting;
+
+            stencilWriteMask |= (int)HDRenderPipeline.StencilBitMask.DoesntReceiveSSR;
+            stencilRef |= !receiveSSR ? (int)HDRenderPipeline.StencilBitMask.DoesntReceiveSSR : 0;
+
+            stencilWriteMask |= (int)HDRenderPipeline.StencilBitMask.DecalsForwardOutputNormalBuffer;
+
+            pass.StencilOverride = new List<string>()
+            {
+                "// Stencil setup",
+                "Stencil",
+                "{",
+                string.Format("   WriteMask {0}", stencilWriteMask),
+                string.Format("   Ref  {0}", stencilRef),
+                "   Comp Always",
+                "   Pass Replace",
+                "}"
+            };
         }
     }
 }

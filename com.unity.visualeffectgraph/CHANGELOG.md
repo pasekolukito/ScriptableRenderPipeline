@@ -4,13 +4,28 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [6.0.0-preview] - 2019-xx-xx
+### Added
+- Basic support for unlit output with LWRP
+
+## [6.3.0-preview] - 2019-02-18
+
+## [6.2.0-preview] - 2019-02-15
+
+### Changed
+- Code refactor: all macros with ARGS have been swapped with macros with PARAM. This is because the ARGS macros were incorrectly named.
+
+### Fixed
+- Better Handling of Null or Missing Parameter Binders (Editor + Runtime)
+
+## [6.1.0-preview] - 2019-02-13
+
+## [6.0.0-preview] - 2019-02-23
 ### Added
 - Add spawnTime & spawnCount operator
 - Add seed slot to constant random mode of Attribute from curve and map
 - Add customizable function in VariantProvider to replace the default cartesian product
 - Add Inverse Lerp node
-- Basic support for unlit output with LWRP
+- Expose light probes parameters in VisualEffect inspector
 
 ### Fixed
 - Some fixes in noise library
@@ -25,6 +40,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Fix fog on decals
 - Saturate alpha component in outputs
 - Fixed scaleY in ConnectTarget
+- Incorrect toggle rectangle in VisualEffect inspector
+- Shader compilation with SimpleLit and debug display
 
 ## [5.2.0-preview] - 2018-11-27
 ### Added

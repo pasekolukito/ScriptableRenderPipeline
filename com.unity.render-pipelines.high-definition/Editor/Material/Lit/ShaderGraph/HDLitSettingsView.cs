@@ -48,7 +48,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
                 case SurfaceType.Opaque:
                     ps.Add(new PropertyRow(CreateLabel("Rendering Pass", indentLevel)), (row) =>
                     {
-                        var valueList = HDSubShaderUtilities.GetRenderingPassList(true);
+                        var valueList = HDSubShaderUtilities.GetRenderingPassList(true, false);
 
                         row.Add(new PopupField<HDRenderQueue.RenderQueueType>(valueList, HDRenderQueue.RenderQueueType.Opaque, HDSubShaderUtilities.RenderQueueName, HDSubShaderUtilities.RenderQueueName), (field) =>
                         {
@@ -72,7 +72,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
                                 break;
                         }
 
-                        var valueList = HDSubShaderUtilities.GetRenderingPassList(false);
+                        var valueList = HDSubShaderUtilities.GetRenderingPassList(false, false);
 
                         row.Add(new PopupField<HDRenderQueue.RenderQueueType>(valueList, HDRenderQueue.RenderQueueType.Transparent, HDSubShaderUtilities.RenderQueueName, HDSubShaderUtilities.RenderQueueName), (field) =>
                         {
@@ -159,6 +159,15 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
                     });
                 });
 
+                ps.Add(new PropertyRow(CreateLabel("Transparent Writes Velocity", indentLevel)), (row) =>
+                {
+                    row.Add(new Toggle(), (toggle) =>
+                    {
+                        toggle.value = m_Node.transparentWritesVelocity.isOn;
+                        toggle.OnToggleChanged(ChangeTransparentWritesVelocity);
+                    });
+                });
+
                 if (m_Node.renderingPass != HDRenderQueue.RenderQueueType.PreRefraction)
                 {
                     ps.Add(new PropertyRow(CreateLabel("Refraction Model", indentLevel)), (row) =>
@@ -223,7 +232,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
                 });
             });
 
-            if (m_Node.surfaceType == SurfaceType.Transparent && m_Node.alphaTest.isOn)
+            if (m_Node.alphaTest.isOn)
             {
                 ++indentLevel;
                 ps.Add(new PropertyRow(CreateLabel("Use Shadow Threshold", indentLevel)), (row) =>
@@ -308,6 +317,15 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
                 });
             });
 
+            ps.Add(new PropertyRow(CreateLabel("Override Baked GI", indentLevel)), (row) =>
+            {
+                row.Add(new Toggle(), (toggle) =>
+                {
+                    toggle.value = m_Node.overrideBakedGI.isOn;
+                    toggle.OnToggleChanged(ChangeoverrideBakedGI);
+                });
+            });
+
             Add(ps);
         }
 
@@ -360,7 +378,7 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
             m_Node.owner.owner.RegisterCompleteObjectUndo("Alpha Mode Change");
             m_Node.alphaMode = alphaMode;
         }
-        
+
         void ChangeRenderingPass(ChangeEvent<HDRenderQueue.RenderQueueType> evt)
         {
             switch (evt.newValue)
@@ -489,6 +507,13 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
             td.isOn = evt.newValue;
             m_Node.alphaTestDepthPostpass = td;
         }
+        void ChangeTransparentWritesVelocity(ChangeEvent<bool> evt)
+        {
+            m_Node.owner.owner.RegisterCompleteObjectUndo("Transparent Writes Velocity Change");
+            ToggleData td = m_Node.transparentWritesVelocity;
+            td.isOn = evt.newValue;
+            m_Node.transparentWritesVelocity = td;
+        }
         void ChangeAlphaTestShadow(ChangeEvent<bool> evt)
         {
             m_Node.owner.owner.RegisterCompleteObjectUndo("Alpha Test Shadow Change");
@@ -536,6 +561,14 @@ namespace UnityEditor.Experimental.Rendering.HDPipeline.Drawing
 
             m_Node.owner.owner.RegisterCompleteObjectUndo("Specular Occlusion Mode Change");
             m_Node.specularOcclusionMode = (SpecularOcclusionMode)evt.newValue;
+        }
+
+        void ChangeoverrideBakedGI(ChangeEvent<bool> evt)
+        {
+            m_Node.owner.owner.RegisterCompleteObjectUndo("overrideBakedGI Change");
+            ToggleData td = m_Node.overrideBakedGI;
+            td.isOn = evt.newValue;
+            m_Node.overrideBakedGI = td;
         }
 
         public AlphaMode GetAlphaMode(HDLitMasterNode.AlphaModeLit alphaModeLit)
