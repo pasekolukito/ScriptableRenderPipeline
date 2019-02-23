@@ -172,24 +172,36 @@ namespace UnityEditor.VFX.Test
             EditorApplication.ExecuteMenuItem("Window/General/Game");
             var graph = MakeTemporaryGraph();
 
+            var output = ScriptableObject.CreateInstance<VFXPointOutput>();
+            graph.AddChild(output);
+
             var contextInitialize = ScriptableObject.CreateInstance<VFXBasicInitialize>();
             contextInitialize.inputSlots.FirstOrDefault(o => o.name == "bounds").value = expectedBound;
+            contextInitialize.LinkTo(output);
             graph.AddChild(contextInitialize);
 
             var spawner = ScriptableObject.CreateInstance<VFXBasicSpawner>();
             spawner.LinkTo(contextInitialize);
             graph.AddChild(spawner);
 
-            var output = ScriptableObject.CreateInstance<VFXPointOutput>();
-            output.LinkFrom(contextInitialize);
-            graph.AddChild(output);
-
             graph.RecompileIfNeeded();
             yield return null;
 
             //< Same Behavior as Drag & Drop
-            GameObject currentObject = new GameObject("TemporaryGameObject", typeof(Transform), typeof(VisualEffect));
-            currentObject.GetComponent<VisualEffect>().visualEffectAsset = graph.visualEffectResource.asset;
+            GameObject currentObject = new GameObject("TemporaryGameObject", /*typeof(Transform),*/ typeof(VisualEffect));
+            var vfx = currentObject.GetComponent<VisualEffect>();
+            var asset = graph.visualEffectResource.asset;
+            Assert.IsNotNull(asset);
+
+            vfx.visualEffectAsset = asset;
+
+            int maxFrame = 512;
+            while (vfx.culled && --maxFrame > 0)
+            {
+                yield return null;
+            }
+            Assert.IsTrue(maxFrame > 0);
+            yield return null;
 
             Assert.IsNotNull(currentObject.GetComponent<VFXRenderer>());
             var actualBound = currentObject.GetComponent<VFXRenderer>().bounds;
