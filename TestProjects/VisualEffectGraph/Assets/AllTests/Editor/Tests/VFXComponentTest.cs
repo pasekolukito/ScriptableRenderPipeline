@@ -165,6 +165,47 @@ namespace UnityEditor.VFX.Test
         }
 
         [UnityTest]
+        public IEnumerator CreateComponent_And_VerifyRendererState()
+        {
+            var expectedBound = new AABox() { center = new Vector3(10, 20, 30), size = new Vector3(300, 200, 100) };
+
+            EditorApplication.ExecuteMenuItem("Window/General/Game");
+            var graph = MakeTemporaryGraph();
+
+            var contextInitialize = ScriptableObject.CreateInstance<VFXBasicInitialize>();
+            contextInitialize.inputSlots.FirstOrDefault(o => o.name == "bounds").value = expectedBound;
+            graph.AddChild(contextInitialize);
+
+            var spawner = ScriptableObject.CreateInstance<VFXBasicSpawner>();
+            spawner.LinkTo(contextInitialize);
+            graph.AddChild(spawner);
+
+            var output = ScriptableObject.CreateInstance<VFXPointOutput>();
+            output.LinkFrom(contextInitialize);
+            graph.AddChild(output);
+
+            graph.RecompileIfNeeded();
+            yield return null;
+
+            //< Same Behavior as Drag & Drop
+            GameObject currentObject = new GameObject("TemporaryGameObject", typeof(Transform), typeof(VisualEffect));
+            currentObject.GetComponent<VisualEffect>().visualEffectAsset = graph.visualEffectResource.asset;
+
+            Assert.IsNotNull(currentObject.GetComponent<VFXRenderer>());
+            var actualBound = currentObject.GetComponent<VFXRenderer>().bounds;
+
+            Assert.AreEqual((double)expectedBound.center.x, (double)actualBound.center.x, 1e-5f);
+            Assert.AreEqual((double)expectedBound.center.y, (double)actualBound.center.y, 1e-5f);
+            Assert.AreEqual((double)expectedBound.center.z, (double)actualBound.center.z, 1e-5f);
+            Assert.AreEqual((double)expectedBound.size.x, (double)actualBound.size.x, 1e-5f);
+            Assert.AreEqual((double)expectedBound.size.y, (double)actualBound.size.y, 1e-5f);
+            Assert.AreEqual((double)expectedBound.size.z, (double)actualBound.size.z, 1e-5f);
+
+            UnityEngine.Object.DestroyImmediate(currentObject);
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator CreateComponent_And_CheckDimension_Constraint()
         {
             EditorApplication.ExecuteMenuItem("Window/General/Game");
