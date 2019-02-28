@@ -5,7 +5,7 @@
         "Unity.VisualEffectGraph.Runtime",
         "UnityEditor.TestTools.Graphics",
         "UnityEngine.TestTools.Graphics",
-        "Unity.Testing.VisualEffectGraph.Common.Runtime"
+        "Unity.Testing.VisualEffectGraph.Runtime"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"
