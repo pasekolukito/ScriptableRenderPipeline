@@ -31,8 +31,8 @@ namespace UnityEngine.VFX.Test
         [SetUp]
         public void Init()
         {
-            var testNePasCommit = VFXCommonGraphicsTests.toto;
-            if (!testNePasCommit) return;
+            //var testNePasCommit = VFXCommonGraphicsTests.toto;
+            //if (!testNePasCommit) return;
 
             m_previousCaptureFrameRate = Time.captureFramerate;
             m_previousFixedTimeStep = UnityEngine.Experimental.VFX.VFXManager.fixedTimeStep;
