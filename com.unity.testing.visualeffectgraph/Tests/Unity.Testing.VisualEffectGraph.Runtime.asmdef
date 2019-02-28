@@ -1,5 +1,5 @@
 {
-    "name": "Unity.Testing.VisualEffectGraph",
+    "name": "VisualEffectGraphTests",
     "references": [
         "Unity.VisualEffectGraph.Editor",
         "Unity.VisualEffectGraph.Runtime",

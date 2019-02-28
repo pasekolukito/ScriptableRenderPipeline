@@ -11,7 +11,8 @@
     "tests",
     "graphics"
   ],
-  "dependencies": {
-    "com.unity.visualeffectgraph": "6.4.0"
-  }
+    "dependencies": {
+        "com.unity.visualeffectgraph": "6.4.0",
+        "com.unity.testframework.graphics": "6.4.0"
+    }
 }

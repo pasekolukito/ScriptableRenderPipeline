@@ -1,18 +1,16 @@
 {
     "name": "Unity.VisualEffectGraph.RuntimeTests",
     "references": [
-        "Unity.Testing.VisualEffectGraph",
         "Unity.VisualEffectGraph.Editor",
         "Unity.VisualEffectGraph.Runtime",
         "UnityEditor.TestTools.Graphics",
-        "UnityEngine.TestTools.Graphics"
+        "UnityEngine.TestTools.Graphics",
+        "VisualEffectGraphTests"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"
     ],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
