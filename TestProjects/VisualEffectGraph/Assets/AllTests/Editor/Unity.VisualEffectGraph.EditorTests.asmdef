@@ -4,8 +4,7 @@
         "Unity.VisualEffectGraph.Editor",
         "Unity.VisualEffectGraph.Runtime",
         "UnityEditor.TestTools.Graphics",
-        "UnityEngine.TestTools.Graphics",
-        "Unity.VisualEffectGraph.Common.RuntimeTests"
+        "UnityEngine.TestTools.Graphics"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"
