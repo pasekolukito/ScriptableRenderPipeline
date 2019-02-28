@@ -1,5 +1,5 @@
 {
-    "name": "Unity.VisualEffectGraph.Common.RuntimeTests",
+    "name": "Unity.Testing.VisualEffectGraph.Common.Runtime",
     "references": [
         "Unity.VisualEffectGraph.Editor",
         "Unity.VisualEffectGraph.Runtime",
@@ -15,5 +15,6 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": []
+    "defineConstraints": [],
+    "versionDefines": []
 }
