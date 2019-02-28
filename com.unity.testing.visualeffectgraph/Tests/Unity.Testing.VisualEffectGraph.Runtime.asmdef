@@ -1,10 +1,9 @@
 {
-    "name": "VisualEffectGraphTests",
+    "name": "VisualEffectGraphGraphicsTests",
     "references": [
+        "UnityEngine.TestTools.Graphics",
         "Unity.VisualEffectGraph.Editor",
-        "Unity.VisualEffectGraph.Runtime",
-        "UnityEditor.TestTools.Graphics",
-        "UnityEngine.TestTools.Graphics"
+        "Unity.VisualEffectGraph.Runtime"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"
@@ -15,6 +14,5 @@
     "overrideReferences": false,
     "precompiledReferences": [],
     "autoReferenced": true,
-    "defineConstraints": [],
-    "versionDefines": []
+    "defineConstraints": []
 }
