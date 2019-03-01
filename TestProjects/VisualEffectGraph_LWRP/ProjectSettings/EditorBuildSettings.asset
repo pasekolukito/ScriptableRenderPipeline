@@ -6,6 +6,6 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Packages/com.unity.testing.visualeffectgraph/Tests/Scenes/000_MultiOutput.unity
+    path: Packages/com.unity.testing.visualeffectgraph/Scenes/000_MultiOutput.unity
     guid: 0ecaa798eef075e44a2d6079bb6332cb
   m_configObjects: {}
