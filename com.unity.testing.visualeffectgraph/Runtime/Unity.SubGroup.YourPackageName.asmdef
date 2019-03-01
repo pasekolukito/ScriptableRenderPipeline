@@ -1,0 +1,6 @@
+{
+    "name": "Unit.[SubGroup].[YourPackageName]",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": []
+}
