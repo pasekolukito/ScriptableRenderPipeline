@@ -1,9 +1,9 @@
 {
-	"name": "com.unity.testing.visualeffectgraph",
-	"displayName":"[Display Name for your Package]",
-	"version": "6.4.0-preview",
-	"unity": "2019.1",
-	"description": "Visual Effect Graphic Test",
-	"dependencies": {
-	}
+    "name": "com.unity.testing.visualeffectgraph",
+    "displayName": "Visual Effect Graphic Tests",
+    "version": "6.4.0-preview",
+    "unity": "2019.1",
+    "description": "This package contains common graphics tests from several scriptable renderpipeline",
+    "dependencies": {
+    }
 }
