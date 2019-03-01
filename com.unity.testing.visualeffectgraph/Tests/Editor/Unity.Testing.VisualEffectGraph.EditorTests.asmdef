@@ -1,8 +1,8 @@
 {
-    "name": "Unity.[SubGroup].[YourPackageName].EditorTests",
+    "name": "Unity.Testing.VisualEffectGraph.EditorTests",
     "references": [
-        "Unity.[SubGroup].[YourPackageName].Editor",
-        "Unity.[SubGroup].[YourPackageName]"
+        "Unity.Testing.VisualEffectGraph.Editor",
+        "Unity.Testing.VisualEffectGraph"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"
